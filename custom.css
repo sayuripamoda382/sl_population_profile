@@ -1,0 +1,36 @@
+/* Make navbar background and text style */
+.navbar {
+  background-color: #0b2265 !important;  /* Dark blue */
+  border-bottom: 2px solid #ccc;
+}
+.navbar-brand,
+.navbar-nav > li > a {
+  color: #fff !important;
+}
+
+/* Position the right-corner logo */
+#top-right-logo {
+  position: fixed;
+  top: 8px;
+  right: 16px;
+  height: 40px;
+  z-index: 9999;
+}
+#top-right-logo img {
+  height: 100%;
+  width: auto;
+}
+
+.value-box {
+  display: flex;
+  flex-direction: column;  /* stack value and caption */
+  justify-content: center; /* vertical align center */
+  align-items: flex-start; /* keep left-aligned */
+  font-size: 1.6em !important;
+  min-height: 80px !important;
+  padding: 10px !important;
+}
+
+.value-box .caption {
+  font-size: 1em !important;
+}

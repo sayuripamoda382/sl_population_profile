@@ -1,0 +1,12 @@
+name: SL_population_profile
+title: SL_population_profile
+username: sayuripamoda
+account: sayuripamoda
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15206456
+bundleId: 10775039
+url: https://sayuripamoda.shinyapps.io/SL_population_profile/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

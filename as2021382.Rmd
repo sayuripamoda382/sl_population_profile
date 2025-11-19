@@ -1,0 +1,460 @@
+---
+title: "Population Profile of Sri Lanka"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+css: custom.css
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(tsibble)
+library(lubridate)
+library(htmltools)
+library(readr)
+library(readxl)
+library(ggplot2)
+library(plotly)
+library(knitr)
+library(RColorBrewer)
+library(scales)
+library(patchwork)
+library(ceylon)
+library(sf)
+
+# datasets
+table01_page1 <- read_csv("table01_page1.csv")
+population_density_district <- read_csv("population_density_district.csv")
+province_district <- read_excel("province_district.xlsx")
+mid_year_pop_district <- read.csv("mid_year_pop_district.csv")
+srilanka_gender <- read.csv("srilanka_gender.csv")
+cleaned_age_groups_data <- read.csv("cleaned_age_groups_data.csv")
+district_pop <- read.csv("district_pop.csv")
+
+
+# Data preprocess
+# dataset 01
+table01_page1_ts <- table01_page1 %>%
+  as_tsibble(index = `census year`)
+
+table01_page1_ts <- table01_page1_ts %>%
+  mutate(`Average annual growth rate` = as.numeric(`Average annual growth rate`))
+
+# Dataset 02
+sl_density <- data.frame(
+  Year = c(1981, 2001, 2012, 2024),
+  Density = c(230, 300, 325, 349)
+)
+
+sl_density <- sl_density %>%
+  as_tsibble(index = Year)
+
+# Vector of province names
+provinces <- c("Sri Lanka", "Western", "Central", "Southern", "Northern", 
+               "Eastern", "North Western", "North Central", "Uva", "Sabaragamuwa")
+
+# Extract province rows
+sl_province_df <- province_district %>%
+  filter(`Province and district` %in% provinces)
+
+# Extract district rows (everything else)
+district_df <- province_district %>%
+  filter(!(`Province and district` %in% provinces))
+```
+
+
+```{r}
+htmltools::tags$div(
+  id = "top-right-logo",
+  tags$img(src = "sri_lanka_logo.png", alt = "Sri Lanka Logo")
+)
+```
+
+
+
+# National Overview
+
+## column { data-width = "450"}
+
+###
+  
+```{r}
+valueBox(
+  value = max(table01_page1_ts$`census date`),
+  caption = "Most Recent Census Date",
+  icon = "fa-calendar",
+  color = "#510400"
+)
+```
+
+###
+
+```{r}
+# Create a value box showing the latest population
+valueBox(
+  value = format(max(table01_page1_ts$`Enumerated Population`), big.mark = ","),
+  caption = "Population",
+  icon = "fa-users",
+  color = "darkgreen"
+)
+```
+
+###
+
+```{r}
+sl_population <- sl_province_df %>%
+  filter(`Province and district` == "Sri Lanka") %>%
+  pull(`usual residence population`)
+
+valueBox(
+  value = format(sl_population, big.mark = ","),
+  caption = "Usual Residence Population",
+  icon = "fa-home",
+  color = "darkred"
+)
+```
+
+###
+
+```{r}
+latest_density <- sl_density %>%
+  filter(Year == max(Year)) %>%
+  pull(Density)
+
+valueBox(
+  value = format(latest_density, big.mark = ","),
+  caption = "Population Density (persons per square km)",
+  icon = "fa-city",
+  color = "goldenrod"
+)
+```
+
+###
+
+```{r, include=FALSE}
+SL_mid_year_pop_2024 <- data.frame(
+  Gender = c("Female", "Male", "Total"),
+  Population = c(11305, 10611, 21916)
+)
+```
+
+```{r}
+valueBox(
+  value = comma( SL_mid_year_pop_2024$Population[SL_mid_year_pop_2024$Gender == "Female"]*1000),
+  caption = "Female Mid Year Population - 2024",
+  icon = "fa-female",
+  color = "#E377C4"
+)
+```
+
+###
+
+```{r}
+# Value box for Male population
+valueBox(
+  value = comma( SL_mid_year_pop_2024$Population[SL_mid_year_pop_2024$Gender == "Male"]*1000),
+  caption = "Male Mid Year Population - 2024",
+  icon = "fa-male",
+  color = "#1F77B4"
+)
+```
+
+## column { data-width = "400"}
+
+###
+
+```{r}
+p1 <- ggplot(table01_page1_ts, aes(x = `census year`, y = `Enumerated Population`)) +
+  geom_line(color = "darkgreen", size = 1) +
+  geom_point(color = "darkgreen", size = 2) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    x = "Census Year",
+    y = "Population"
+  ) +
+  theme_minimal()
+
+ggplotly(p1)
+```
+
+### Midyear Population by Gender Over Time
+
+```{r}
+srilanka_gender_ts <- srilanka_gender %>%
+   mutate(Gender = factor(Gender, levels = c("Female", "Male", "Total"))) %>%
+   as_tsibble(index = Year, key = Gender)
+ 
+ gender_colors <- c(
+   "Female" = "#E377C2",  # rose pink
+   "Male"   = "#1F77B4",  # blue
+   "Total"  = "darkgreen"   # green
+ )
+ 
+p2 <- ggplot(srilanka_gender_ts, aes(x = Year, y = Population, color = Gender)) +
+   geom_line(size = 1.2) +
+   geom_point(size = 2) +
+   labs(y = "Population (thousands)") +
+   scale_color_manual(values = gender_colors) +
+   theme_minimal()
+ 
+ggplotly(p2)
+```
+
+## column { data-width = "400"}
+
+###
+
+```{r}
+p3 <- ggplot(table01_page1_ts, aes(x = `census year`, y = `Average annual growth rate`)) +
+  geom_line(color = "orange", size = 1) +      
+  geom_point(color = "orange", size = 2) +     
+  labs(
+    x = "Census Year",
+    y = "Average Annual Growth Rate (%)"
+  ) +
+  theme_minimal() 
+
+ggplotly(p3)
+```
+
+### Mid year Population by Age Group, 2024
+
+```{r}
+p4 <- cleaned_age_groups_data %>%
+  filter(Year == 2024, Gender == "Total") %>%
+  mutate(Age_Group = factor(Age_Group, levels = c(
+    "0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", 
+    "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80+"))) %>%
+  ggplot(aes(x = Age_Group, y = Population)) +
+  geom_col(fill = "darkblue") +
+  labs(
+    x = "Age Group",
+    y = "Population (thousands)"
+  ) +
+  coord_flip() +
+  theme_minimal()
+
+ggplotly(p4)
+```
+
+
+
+# Provincial Overview
+
+## column { data-width = "400"}  
+
+### Provincial Population, 2024
+
+```{r, include=FALSE}
+# Provinces list
+provinces <- c(
+  "Western", "Central", "Southern", "Northern", 
+  "Eastern", "North Western", "North Central", 
+  "Uva", "Sabaragamuwa"
+)
+
+# Extract only province rows
+province_pop <- province_district %>%
+  filter(`Province and district` %in% provinces) %>%
+  rename(Province = `Province and district`)
+
+province_pop <- province_pop %>%
+  rename(PROVINCE = Province)
+
+province_pop <- province_pop %>%
+  mutate(PROVINCE = toupper(PROVINCE))
+
+province <- ceylon::province
+
+province_map_data <- province %>%
+  left_join(province_pop, by = "PROVINCE") 
+```
+
+```{r}
+p5 <- ggplot(province_map_data) +
+  geom_sf(aes(
+    fill = `total population`,
+    text = paste0("Province: ", PROVINCE, "<br>",
+                  "Total Population: ", `total population`)
+  )) +
+  scale_fill_distiller(
+    palette = "Greens",  
+    name = "Total Population",
+    direction = 1,
+    labels = label_comma() 
+  ) +
+  theme_minimal()
+
+ggplotly(p5, tooltip = "text")
+```
+
+## column { data-width = "400"}
+
+### Roofless Percentage, 2024
+
+```{r}
+p6 <- ggplot(province_map_data) +
+    geom_sf(aes(fill = percentage,
+                text = paste0("Province: ", PROVINCE, "<br>",
+                  "Percentage: ", `percentage`)
+                )) +
+ scale_fill_distiller(
+    palette = "Reds",  
+    name = "Percentage",
+    direction = 1
+  ) +
+theme_minimal()
+
+ggplotly(p6, tooltip = "text")
+```
+
+## column { data-width = "400"}
+
+### Genderwise Mid Year Population, 2024
+
+```{r, inlcude = FALSE}
+# Mapping: District → Province
+district_province_map <- tribble(
+  ~Region,         ~Province,
+  "Colombo",       "Western",
+  "Gampaha",       "Western",
+  "Kalutara",      "Western",
+  "Kandy",         "Central",
+  "Matale",        "Central",
+  "Nuwara-eliya",  "Central",
+  "Galle",         "Southern",
+  "Matara",        "Southern",
+  "Hambantota",    "Southern",
+  "Jaffna",        "Northern",
+  "Kilinochchi",   "Northern",
+  "Mannar",        "Northern",
+  "Vavuniya",      "Northern",
+  "Mullaitivu",    "Northern",
+  "Batticaloa",    "Eastern",
+  "Ampara",        "Eastern",
+  "Trincomalee",   "Eastern",
+  "Kurunegala",    "North Western",
+  "Puttalam",      "North Western",
+  "Anuradhapura",  "North Central",
+  "Polonnaruwa",   "North Central",
+  "Badulla",       "Uva",
+  "Monaragala",    "Uva",
+  "Ratnapura",     "Sabaragamuwa",
+  "Kegalle",       "Sabaragamuwa"
+)
+
+# Summarise: Province + Year + Gender totals
+province_pop_gender <- mid_year_pop_district %>%
+  left_join(district_province_map, by = "Region") %>%
+  group_by(Province, Year, Gender) %>%
+  summarise(
+    total_population = sum(Population, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+p7 <- province_pop_gender %>%
+  filter(Year == 2024, Gender != "Total") %>%
+  mutate(Province = reorder(Province, total_population, sum)) %>%
+  ggplot(aes(x = Province, y = total_population, fill = Gender)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(
+    values = c("Male" = "#1F77B4", "Female" = "#E377C4")
+  ) +
+  labs(x = "Province", y = "Population (thousands)") +
+  theme_minimal() +
+  coord_flip()
+
+ggplotly(p7)
+```
+
+### Mid Year Population Trends
+
+```{r}
+p8 <- province_pop_gender %>%
+  filter(Gender == "Total") %>%
+  ggplot(aes(x = Year, y = total_population, color = Province)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    x = "Year",
+    y = "Population (thousands)",
+    color = "Province"
+  ) +
+  theme_minimal()
+
+ggplotly(p8)
+```
+
+# District level drill down
+
+## column { data-width = "400"}
+
+### District Population, 2024
+
+```{r, include=FALSE}
+district_pop <- district_pop %>%
+  mutate(District = toupper(District))
+
+district <- ceylon::district
+
+district_map_pop <- district %>%
+  left_join(district_pop, by = c("DISTRICT" = "District"))
+```
+
+```{r}
+p9 <- ggplot(district_map_pop) +
+  geom_sf(aes(fill = total_population,
+              text = paste0("District: ", DISTRICT,
+                            "<br>",
+                            "Total Population: ", comma(total_population)))) +
+  scale_fill_distiller(palette = "Greens",
+                       direction = 1,
+                       name = "Total Population",
+                       labels = comma) +
+  theme_minimal()
+
+ggplotly(p9, tooltip = "text")
+```
+
+## column { data-width = "400"}
+
+### Population Density, 2024
+
+```{r}
+p10 <- ggplot(district_map_pop) +
+  geom_sf(aes(fill = population_density,
+              text = paste0("District: ", DISTRICT,
+                            "<br>",
+                            "Population Density: ", comma(population_density)))) +
+  scale_fill_distiller(palette = "Blues", direction = 1, 
+                       name = "Population Density") +
+  theme_minimal()
+
+ggplotly(p10, tooltip = "text")
+```
+
+## column { data-width = "400"}
+
+### Mid Year Population Over Time
+
+```{r}
+mid_year_pop_ts <- mid_year_pop_district %>%
+  filter(Gender == "Total") %>%   # Keep only total population
+  as_tsibble(
+    key = Region,                  # Each district is a "key"
+    index = Year                   # Time index column
+  )
+
+plot_ly(mid_year_pop_ts, x = ~Year, y = ~Population, color = ~Region,
+        type = 'scatter', mode = 'lines+markers') %>%
+  layout(
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Population (thousands)")
+  )
+```
+
+
